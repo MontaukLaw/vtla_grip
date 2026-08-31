@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-08-30T22:24:01.943+00:00",
+  "source_record": "C:\\ai\\VTLA_grip\\records\\calibration\\blue-dot-20260830-200608-851848.jsonl",
+  "method": "Kabsch rigid transform with deterministic RANSAC and interleaved holdout",
+  "units": {
+    "transform_translation": "mm",
+    "input_camera": "m",
+    "input_base": "mm"
+  },
+  "transform_name": "T_base_camera",
+  "transform_4x4": [
+    [
+      -0.8221925478358312,
+      0.43074604313146353,
+      -0.3720984555326898,
+      216.55438182545578
+    ],
+    [
+      0.5690041370370689,
+      0.6044081806617876,
+      -0.5576065307937207,
+      933.0455218272507
+    ],
+    [
+      -0.015287456228083598,
+      -0.670185494826392,
+      -0.7420361825452845,
+      676.165481587402
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "fixed_tool_orientation_deg": [
+    179.45037968644542,
+    -0.05729578223448582,
+    -5.6722821410592985
+  ],
+  "tool_orientation_range_deg": [
+    0.05729162675808652,
+    0.05729578223448582,
+    0.114591364365773
+  ],
+  "sample_count": 31,
+  "inlier_count": 29,
+  "outlier_sample_indices": [
+    21,
+    26
+  ],
+  "training": {
+    "count": 25,
+    "mean_mm": 7.748977450311636,
+    "rms_mm": 8.845682674352297,
+    "max_mm": 18.874211056589665,
+    "median_mm": 6.328201716857351,
+    "ransac_inliers": 24
+  },
+  "validation": {
+    "count": 6,
+    "mean_mm": 7.3740276206097315,
+    "rms_mm": 8.56527494583481,
+    "max_mm": 14.159362097165095,
+    "median_mm": 5.381230627107957
+  },
+  "final_all_samples": {
+    "count": 31,
+    "mean_mm": 7.624961489518333,
+    "rms_mm": 8.86438451294436,
+    "max_mm": 19.718739267454175,
+    "median_mm": 5.841654153563233
+  },
+  "per_sample": [
+    {
+      "sample_index": 1,
+      "residual_mm": 2.651256411759077,
+      "accepted": true
+    },
+    {
+      "sample_index": 2,
+      "residual_mm": 5.358812638291188,
+      "accepted": true
+    },
+    {
+      "sample_index": 3,
+      "residual_mm": 2.345091544234861,
+      "accepted": true
+    },
+    {
+      "sample_index": 4,
+      "residual_mm": 3.091785109955815,
+      "accepted": true
+    },
+    {
+      "sample_index": 5,
+      "residual_mm": 4.190063571045339,
+      "accepted": true
+    },
+    {
+      "sample_index": 6,
+      "residual_mm": 4.710643004634939,
+      "accepted": true
+    },
+    {
+      "sample_index": 7,
+      "residual_mm": 3.7314505259406903,
+      "accepted": true
+    },
+    {
+      "sample_index": 8,
+      "residual_mm": 4.818835689344333,
+      "accepted": true
+    },
+    {
+      "sample_index": 9,
+      "residual_mm": 5.782467979003857,
+      "accepted": true
+    },
+    {
+      "sample_index": 10,
+      "residual_mm": 5.841654153563233,
+      "accepted": true
+    },
+    {
+      "sample_index": 11,
+      "residual_mm": 5.817507172378804,
+      "accepted": true
+    },
+    {
+      "sample_index": 12,
+      "residual_mm": 8.251720974623657,
+      "accepted": true
+    },
+    {
+      "sample_index": 13,
+      "residual_mm": 9.684150200455576,
+      "accepted": true
+    },
+    {
+      "sample_index": 14,
+      "residual_mm": 6.248097063997942,
+      "accepted": true
+    },
+    {
+      "sample_index": 15,
+      "residual_mm": 11.592471518038145,
+      "accepted": true
+    },
+    {
+      "sample_index": 16,
+      "residual_mm": 12.64194621719806,
+      "accepted": true
+    },
+    {
+      "sample_index": 17,
+      "residual_mm": 3.3122700746614404,
+      "accepted": true
+    },
+    {
+      "sample_index": 18,
+      "residual_mm": 6.737332537355838,
+      "accepted": true
+    },
+    {
+      "sample_index": 19,
+      "residual_mm": 4.892725467443204,
+      "accepted": true
+    },
+    {
+      "sample_index": 20,
+      "residual_mm": 3.9568126797231944,
+      "accepted": true
+    },
+    {
+      "sample_index": 21,
+      "residual_mm": 19.718739267454175,
+      "accepted": false
+    },
+    {
+      "sample_index": 22,
+      "residual_mm": 7.780123968013772,
+      "accepted": true
+    },
+    {
+      "sample_index": 23,
+      "residual_mm": 4.624723014133128,
+      "accepted": true
+    },
+    {
+      "sample_index": 24,
+      "residual_mm": 13.86694333227639,
+      "accepted": true
+    },
+    {
+      "sample_index": 25,
+      "residual_mm": 14.774136589029009,
+      "accepted": true
+    },
+    {
+      "sample_index": 26,
+      "residual_mm": 17.35583582793677,
+      "accepted": false
+    },
+    {
+      "sample_index": 27,
+      "residual_mm": 13.176158374859696,
+      "accepted": true
+    },
+    {
+      "sample_index": 28,
+      "residual_mm": 6.834735128440343,
+      "accepted": true
+    },
+    {
+      "sample_index": 29,
+      "residual_mm": 11.402770654190006,
+      "accepted": true
+    },
+    {
+      "sample_index": 30,
+      "residual_mm": 2.4046828634570794,
+      "accepted": true
+    },
+    {
+      "sample_index": 31,
+      "residual_mm": 8.777862621628794,
+      "accepted": true
+    }
+  ],
+  "quality": {
+    "rotation_determinant": 1.0000000000000009,
+    "rotation_orthogonality_error": 1.5091072615699644e-15,
+    "hover_ready": true
+  },
+  "warning": "Blue-dot-to-TCP offset is not independently solved. This transform is only suitable for the validated, nearly fixed tool orientation until that offset is measured."
+}

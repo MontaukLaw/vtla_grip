@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Node / frontend build output
+frontend/node_modules/
+frontend/.next/
+frontend/.vinext/
+frontend/.wrangler/
+frontend/dist/
+frontend/coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local runtime state
+.runtime/
+*.pid
+*.log
+*.tmp
+*.bak
+
+# Captured calibration, vision and tactile datasets
+records/
+
+# Locally trained model artifacts; keep documentation/placeholders
+models/**/*
+!models/**/
+!models/**/README.md
+!models/**/.gitkeep
+
+# IDE / OS
+.idea/
+.vscode/
+*.code-workspace
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example

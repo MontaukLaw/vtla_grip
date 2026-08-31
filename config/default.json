@@ -1,0 +1,124 @@
+{
+  "camera": {
+    "color_width": 640,
+    "color_height": 480,
+    "depth_width": 640,
+    "depth_height": 480,
+    "fps": 30,
+    "depth_window_radius": 2,
+    "min_depth_m": 0.1,
+    "max_depth_m": 1.5
+  },
+  "robot": {
+    "host": "127.0.0.1",
+    "port": 18765,
+    "allow_motion": true,
+    "default_speed": 5,
+    "motion_timeout_s": 120.0,
+    "service_script": "C:/ai/robot_arm/robot_arm_workflow_ui/robot_arm_workflow_ui/robot_service.py"
+  },
+  "gripper": {
+    "port": "COM11",
+    "baud_rate": 115200,
+    "modbus_id": 1,
+    "stop_bits": 1,
+    "parity": "N"
+  },
+  "sensors": {
+    "left": {
+      "port": "COM68",
+      "baud_rate": 1000000
+    },
+    "right": {
+      "port": "COM69",
+      "baud_rate": 1000000
+    },
+    "horizontal_flip": true,
+    "stale_after_s": 1.0,
+    "median_window": 3
+  },
+  "calibration": {
+    "output_path": "config/calibration.json",
+    "ransac_threshold_mm": 15.0,
+    "validation_fraction": 0.2
+  },
+  "targeting": {
+    "marker_to_tip_xyz_mm": [
+      10.0,
+      30.0,
+      220.0
+    ],
+    "maximum_speed": 100
+  },
+  "transfer": {
+    "grasp_clearance_mm": 0.0,
+    "pick_lift_mm": 100.0,
+    "place_approach_mm": 110.0,
+    "place_clearance_mm": 10.0,
+    "transit_speed": 50,
+    "approach_speed": 50,
+    "acceleration": 10,
+    "preview_ttl_s": 120.0,
+    "gripper_open_position": 1000,
+    "gripper_min_position": 100,
+    "gripper_close_step": 25,
+    "gripper_speed": 20,
+    "gripper_force": 50,
+    "grasp_poll_interval_s": 0.1,
+    "release_wait_s": 0.5,
+    "arrival_position_tolerance_mm": 3.0,
+    "arrival_orientation_tolerance_deg": 2.0,
+    "arrival_stable_frames": 3,
+    "arrival_timeout_s": 10.0,
+    "arrival_poll_interval_s": 0.1
+  },
+  "vision": {
+    "roi_xyxy": [
+      0,
+      0,
+      640,
+      480
+    ],
+    "green_hsv_low": [
+      35,
+      55,
+      35
+    ],
+    "green_hsv_high": [
+      90,
+      255,
+      255
+    ],
+    "gray_hsv_low": [
+      0,
+      0,
+      45
+    ],
+    "gray_hsv_high": [
+      179,
+      65,
+      220
+    ],
+    "object_min_area_px": 500.0,
+    "object_max_area_px": 12000.0,
+    "tray_min_area_px": 1200.0,
+    "tray_min_saturation": 120.0,
+    "tray_min_rotated_aspect_ratio": 1.15,
+    "tray_max_rotated_aspect_ratio": 1.85,
+    "tray_max_vertices": 5,
+    "tray_depth_max_spread_m": 0.1,
+    "contour_min_solidity": 0.78,
+    "cylinder_min_circularity": 0.58,
+    "square_aspect_tolerance": 0.28,
+    "depth_max_spread_m": 0.08,
+    "morphology_kernel_px": 5,
+    "proposal_min_height_m": 0.012,
+    "proposal_max_height_m": 0.35,
+    "proposal_min_area_px": 350.0,
+    "proposal_max_area_px": 80000.0,
+    "gray_depth_min_fraction": 0.55,
+    "depth_square_aspect_tolerance": 0.65,
+    "gray_adaptive_block_px": 51,
+    "gray_adaptive_c": 10.0
+  }
+}
