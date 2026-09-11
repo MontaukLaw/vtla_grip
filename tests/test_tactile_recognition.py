@@ -90,3 +90,16 @@ def test_training_creates_independent_model_for_visual_class(tmp_path) -> None:
     assert result.vision_class == "cube"
     assert result.property == "软"
     assert workspace.model_status("cylinder")["available"] is False
+
+
+def test_sample_summary_exposes_each_sides_peak_for_existing_samples(tmp_path):
+    workspace = TactileRecognitionWorkspace(tmp_path / "data", tmp_path / "models")
+    workspace.sync_vision_classes([{"name": "cube"}])
+    workspace.save_sample(
+        vision_class="cube", property_label="软",
+        frames=[[1.0] * 32 + [8.0] * 32, [5.0] * 32 + [2.0] * 32],
+        timestamps=[0.0, 1.0], final_gripper_position=420,
+    )
+    summary = workspace.list_samples()["samples"][0]
+    assert summary["left_peak"] == 5.0
+    assert summary["right_peak"] == 8.0

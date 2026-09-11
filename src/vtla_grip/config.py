@@ -82,12 +82,13 @@ class TransferConfig:
     gripper_speed: int = 20
     gripper_force: int = 50
     grasp_poll_interval_s: float = 0.10
-    release_wait_s: float = 0.50
+    release_wait_s: float = 0.0
     arrival_position_tolerance_mm: float = 3.0
     arrival_orientation_tolerance_deg: float = 2.0
-    arrival_stable_frames: int = 3
+    arrival_stable_frames: int = 1
     arrival_timeout_s: float = 10.0
     arrival_poll_interval_s: float = 0.10
+    wait_for_arrival_feedback: bool = False
 
 
 @dataclass(frozen=True)

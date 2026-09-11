@@ -29,6 +29,7 @@ import type {
   Panel,
   PlaceTargetStatus,
   SelectedPoint,
+  SensorData,
   TransferPreviewResult,
   TransferStatus,
   VisionClass,
@@ -103,6 +104,14 @@ const navigation: Array<{ id: Panel; label: string; icon: typeof Camera }> = [
   { id: "settings", label: "设置", icon: Settings },
 ];
 
+type PressurePoint = {
+  time: number;
+  leftSum: number;
+  rightSum: number;
+  leftPeak: number;
+  rightPeak: number;
+};
+
 export function ControlDashboard() {
   const [panel, setPanel] = useState<Panel | null>(null);
   const [devices, setDevices] = useState<DeviceState>(emptyDevices);
@@ -111,6 +120,7 @@ export function ControlDashboard() {
   const [logs, setLogs] = useState<LogEvent[]>([]);
   const [point, setPoint] = useState<SelectedPoint | null>(null);
   const [vision, setVision] = useState<VisionResult | null>(null);
+  const [pressureHistory, setPressureHistory] = useState<PressurePoint[]>([]);
   const [workspace, setWorkspace] = useState<WorkspaceStatus>(emptyWorkspace);
   const [placeTarget, setPlaceTarget] =
     useState<PlaceTargetStatus>(emptyPlaceTarget);
@@ -118,6 +128,7 @@ export function ControlDashboard() {
   const [transferTarget, setTransferTarget] = useState<
     "green_cylinder" | "gray_cube"
   >("green_cylinder");
+  const [transferProperty, setTransferProperty] = useState<"" | "软" | "硬">("");
   const [transferDestination, setTransferDestination] = useState<
     "green_tray" | "specified_position"
   >("green_tray");
@@ -170,6 +181,32 @@ export function ControlDashboard() {
       window.clearInterval(timer);
     };
   }, [refresh]);
+
+  useEffect(() => {
+    let active = true;
+    const update = () =>
+      void api<SensorData>("/api/sensors/data").then((data) => {
+        if (!active || !data.features) return;
+        const left = data.features.left;
+        const right = data.features.right;
+        setPressureHistory((current) => [
+          ...current,
+          {
+            time: Date.now(),
+            leftSum: left.sum,
+            rightSum: right.sum,
+            leftPeak: left.max,
+            rightPeak: right.max,
+          },
+        ].slice(-100));
+      }).catch(() => undefined);
+    update();
+    const timer = window.setInterval(update, 250);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     if (!notice) return;
@@ -294,6 +331,7 @@ export function ControlDashboard() {
                 ? "place_into_tray"
                 : "place_at_position",
             target_class: transferTarget,
+            target_property: transferProperty || null,
           },
         );
         setVision(result.vision);
@@ -721,6 +759,7 @@ export function ControlDashboard() {
           </section>
 
           <aside className="space-y-4">
+            <PressureCharts history={pressureHistory} />
             <InfoCard title="目标坐标" icon={Crosshair}>
               <div className="grid grid-cols-3 divide-x divide-[#203b46] border border-[#203b46] bg-[#08131a]">
                 {(["X", "Y", "Z"] as const).map((axis, index) => (
@@ -824,6 +863,27 @@ export function ControlDashboard() {
                 </select>
               </label>
               <label className="mt-3 block text-xs text-[#718791]">
+                软硬要求
+                <select
+                  value={transferProperty}
+                  disabled={Boolean(transfer?.running)}
+                  onChange={(event) => {
+                    setTransferProperty(event.target.value as "" | "软" | "硬");
+                    setTransfer(null);
+                  }}
+                  className="mt-2 h-10 w-full rounded-md border border-[#2a4652] bg-[#08141a] px-3 text-sm text-white outline-none focus:border-[#26d0a8]"
+                >
+                  <option value="">不限</option>
+                  <option value="软">软</option>
+                  <option value="硬">硬</option>
+                </select>
+              </label>
+              {transferProperty && (
+                <p className="mt-2 text-xs leading-5 text-[#718791]">
+                  逐个夹持判断软硬，不符合则原位松开再抓下一个；全部不符合时提示未找到匹配物体。
+                </p>
+              )}
+              <label className="mt-3 block text-xs text-[#718791]">
                 放置目标
                 <select
                   value={transferDestination}
@@ -882,7 +942,7 @@ export function ControlDashboard() {
                 </div>
               )}
               <div className="mt-3 rounded-md border border-[#294550] bg-[#071116] px-3 py-2 text-xs text-[#a9bbc2]">
-                把{visionLabels[transferTarget]}
+                把{transferProperty ? `${transferProperty}的` : ""}{visionLabels[transferTarget]}
                 {transferDestination === "green_tray"
                   ? "放入绿色托盘里面"
                   : "放到鼠标指定位置"}
@@ -987,6 +1047,18 @@ export function ControlDashboard() {
                       {transfer.plan.motion.place_clearance_mm.toFixed(0)} mm
                     </span>
                   </div>
+                  {transfer.plan.command.target_property && (
+                    <div className="rounded-md border border-[#294550] px-3 py-2">
+                      <div>要求：{transfer.plan.command.target_property} · 候选 {transfer.plan.candidates?.length ?? 1} 个</div>
+                      {transfer.candidate_index && <div>当前检查第 {transfer.candidate_index} 个</div>}
+                      {transfer.attempts?.map((attempt, index) => (
+                        <div key={attempt.source.detection_id} className="mt-1 text-[#91a4ac]">
+                          第 {index + 1} 个：{attempt.recognition_result.property ?? "识别失败"}
+                          {attempt.matched ? "，符合要求" : "，未匹配"}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {transfer.recognition_result && (
                     <div className="rounded-md border border-[#294550] bg-[#071116] px-3 py-2">
                       <div className="flex justify-between gap-3">
@@ -1158,6 +1230,69 @@ function HeaderStatus({ label, ok }: { label: string; ok: boolean }) {
     </div>
   );
 }
+
+function PressureCharts({ history }: { history: PressurePoint[] }) {
+  return (
+    <InfoCard title="夹爪压力变化" icon={RadioTower}>
+      <div className="space-y-3">
+        <PressureChart
+          title="左夹爪"
+          color="#42e7bd"
+          sum={history.map((point) => point.leftSum)}
+          peak={history.map((point) => point.leftPeak)}
+        />
+        <PressureChart
+          title="右夹爪"
+          color="#6ea8ff"
+          sum={history.map((point) => point.rightSum)}
+          peak={history.map((point) => point.rightPeak)}
+        />
+      </div>
+    </InfoCard>
+  );
+}
+
+function PressureChart({
+  title,
+  color,
+  sum,
+  peak,
+}: {
+  title: string;
+  color: string;
+  sum: number[];
+  peak: number[];
+}) {
+  const scale = Math.max(1, ...sum, ...peak);
+  const points = (values: number[]) =>
+    values
+      .map(
+        (value, index) =>
+          `${(index / Math.max(1, values.length - 1)) * 100},${46 - (value / scale) * 42}`,
+      )
+      .join(" ");
+  return (
+    <div className="rounded-md border border-[#294550] bg-[#071116] p-2">
+      <div className="mb-1 flex items-center justify-between text-[10px]">
+        <span style={{ color }}>{title}</span>
+        <span className="text-[#91a4ac]">量程 0–{scale.toFixed(1)}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex h-20 w-9 shrink-0 flex-col justify-between text-right font-mono text-[9px] text-[#637b85]">
+          <span>{scale.toFixed(0)}</span><span>{(scale / 2).toFixed(0)}</span><span>0</span>
+        </div>
+        <svg viewBox="0 0 100 48" className="h-20 min-w-0 flex-1" preserveAspectRatio="none" aria-label={`${title}总压力和峰值压力曲线`}>
+          {[4, 25, 46].map((y) => <line key={y} x1="0" x2="100" y1={y} y2={y} stroke="#203740" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />)}
+          <polyline points={points(sum)} fill="none" stroke={color} strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+          <polyline points={points(peak)} fill="none" stroke="#ffffff" strokeWidth="0.9" strokeDasharray="2 1" vectorEffect="non-scaling-stroke" />
+        </svg>
+      </div>
+      <div className="mt-1 flex justify-between text-[9px] text-[#718791]"><span>总压力和</span><span className="text-white">峰值压力</span></div>
+      <div className="mt-1 flex justify-between font-mono text-[9px] text-[#91a4ac]"><span>当前总和 {sum.at(-1)?.toFixed(1) ?? "—"}</span><span>当前峰值 {peak.at(-1)?.toFixed(1) ?? "—"}</span></div>
+    </div>
+  );
+}
+
 function InfoCard({
   title,
   icon: Icon,
@@ -1167,6 +1302,7 @@ function InfoCard({
   icon: typeof Activity;
   children: React.ReactNode;
 }) {
+  if (["目标坐标", "视觉识别", "抓取流程", "系统状态"].includes(title)) return null;
   return (
     <section className="border border-[#203b46] bg-[#0b1820]">
       <div className="flex h-11 items-center gap-2 border-b border-[#203b46] px-4 text-sm">

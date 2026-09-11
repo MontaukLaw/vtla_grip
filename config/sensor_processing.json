@@ -1,1 +1,267 @@
-{"appearance":{"theme":"dark"},"point_cloud":{"left_offset":[0.326,-0.294,0.0],"right_offset":[-1.241,-0.366,0.0],"dense_rows":48,"dense_cols":24,"height_scale":1.1,"dot_size":4.0,"influence_sigma_row":0.5,"influence_sigma_col":0.2,"mountain_active_threshold":1.0,"mountain_peak_gain":1.0,"response_alpha":0.55,"fall_alpha":0.35,"fall_duration_s":0.1},"signal_processing":{"override_profile":true},"sensor_type_overrides":{"left":{"heatmap_display":{"display":{"threshold":100000.0,"gamma":0.1,"log_strength":10.0,"smoothing":3,"sharpening":1.0},"preprocessing":{"signal_mask":3.0,"signal_high_mask":0.0,"final_signal_mask":15.0,"median_filter":{"enabled":false,"window":3},"release_gate":{"enabled":false,"release_slope":0.9,"release_drop_abs":50.0,"release_level":0.0,"rearm_slope":0.5,"rearm_level":0.0,"release_frames":3,"rearm_frames":2}},"temporal_filter":{"enabled":false,"window":3},"baseline":{"enabled":true,"suppress_during_initializing":true,"tracker":{"window_size":15,"spike_multiplier":10.0,"contact_level_multiplier":10.0,"calm_diff_multiplier":5.0,"recovery_level_multiplier":10.0,"min_noise":1.0,"freeze_noise_after_ready":false,"verbose":false}},"std_filter":{"enabled":true,"subtract_multiplier":1.0,"update_interval":1.0},"dynamic_threshold":{"enabled":false,"min_value":5.0,"smooth":1.0}},"state_transitions":{"auto_grasp_trigger":{"point_threshold":1000.0,"confirm_frames":3},"contact_stop_trigger":{"point_threshold":10.0,"contact_confirm_frames":0},"auto_release_trigger":{"delay_seconds":1.0,"baseline_frames":8,"point_change_threshold":10000.0,"point_change_ratio":0.3,"confirm_frames":3,"post_release_guard_seconds":0.0,"rapid_rise_window_seconds":0.5,"rapid_rise_threshold":100.0,"rapid_rise_confirm_frames":3,"release_heatmap_fall_seconds":0.3,"baseline_follow_time_constant_seconds":30.0},"idle_std_refresh":{"stable_duration":1.0}},"adaptive_grasper":{"approach_step_pos":20,"approach_slow_step_pos":20,"approach_slow_guard_seconds":1.0,"approach_interval":0.08,"contact_frames":15,"min_force":20,"force_step":4,"force_step_small":1,"loop_interval":0.09,"spread_min_increase":0.01,"var_high_factor":2.5,"slip_cop_disp":3.0,"slip_ref_frames":2,"slip_vel_window":8,"slip_vel_disp":1.5,"slip_vel_min_r2":0.75,"slip_cumul_disp":3.0,"slip_min_cop_nz":3,"slip_loss_ratio":0.4,"slip_confirm_frames":2,"hold_interval":0.01,"max_position":1000,"open_position":1000,"release_stop_position":1000,"release_step_pos":50,"release_interval":0.06,"release_clear_point_threshold":0.1,"release_clear_confirm_frames":3,"release_zero_frames":20,"release_zero_timeout":1.0,"min_release_force":100,"min_grasp_position":100}},"right":{"heatmap_display":{"display":{"threshold":100000.0,"gamma":0.1,"log_strength":10.0,"smoothing":3,"sharpening":1.0},"preprocessing":{"signal_mask":3.0,"signal_high_mask":0.0,"final_signal_mask":15.0,"median_filter":{"enabled":false,"window":10},"release_gate":{"enabled":false,"release_slope":0.9,"release_drop_abs":50.0,"release_level":0.0,"rearm_slope":0.5,"rearm_level":0.0,"release_frames":2,"rearm_frames":2}},"temporal_filter":{"enabled":false,"window":3},"baseline":{"enabled":true,"suppress_during_initializing":true,"tracker":{"window_size":15,"spike_multiplier":10.0,"contact_level_multiplier":10.0,"calm_diff_multiplier":5.0,"recovery_level_multiplier":10.0,"min_noise":5.0,"freeze_noise_after_ready":false,"verbose":false}},"std_filter":{"enabled":true,"subtract_multiplier":1.0,"update_interval":1.0},"dynamic_threshold":{"enabled":false,"min_value":5.0,"smooth":1.0}},"state_transitions":{"auto_grasp_trigger":{"point_threshold":1000.0,"confirm_frames":3},"contact_stop_trigger":{"point_threshold":0.1,"contact_confirm_frames":0},"auto_release_trigger":{"delay_seconds":1.0,"baseline_frames":8,"point_change_threshold":10000.0,"point_change_ratio":0.3,"confirm_frames":3,"post_release_guard_seconds":0.0,"rapid_rise_window_seconds":0.5,"rapid_rise_threshold":100.0,"rapid_rise_confirm_frames":3,"release_heatmap_fall_seconds":0.3,"baseline_follow_time_constant_seconds":30.0},"idle_std_refresh":{"stable_duration":1.0}},"adaptive_grasper":{"approach_step_pos":20,"approach_slow_step_pos":20,"approach_slow_guard_seconds":1.0,"approach_interval":0.08,"contact_frames":15,"min_force":20,"force_step":4,"force_step_small":1,"loop_interval":0.09,"spread_min_increase":0.01,"var_high_factor":2.5,"slip_cop_disp":3.0,"slip_ref_frames":2,"slip_vel_window":8,"slip_vel_disp":1.5,"slip_vel_min_r2":0.75,"slip_cumul_disp":3.0,"slip_min_cop_nz":3,"slip_loss_ratio":0.4,"slip_confirm_frames":2,"hold_interval":0.01,"max_position":1000,"open_position":1000,"release_stop_position":1000,"release_step_pos":50,"release_interval":0.06,"release_clear_point_threshold":0.1,"release_clear_confirm_frames":3,"release_zero_frames":20,"release_zero_timeout":1.0,"min_release_force":100,"min_grasp_position":100}}}}
+{
+  "appearance": {
+    "theme": "dark"
+  },
+  "point_cloud": {
+    "left_offset": [
+      0.326,
+      -0.294,
+      0.0
+    ],
+    "right_offset": [
+      -1.241,
+      -0.366,
+      0.0
+    ],
+    "dense_rows": 48,
+    "dense_cols": 24,
+    "height_scale": 1.1,
+    "dot_size": 4.0,
+    "influence_sigma_row": 0.5,
+    "influence_sigma_col": 0.2,
+    "mountain_active_threshold": 1.0,
+    "mountain_peak_gain": 1.0,
+    "response_alpha": 0.55,
+    "fall_alpha": 0.35,
+    "fall_duration_s": 0.1
+  },
+  "signal_processing": {
+    "override_profile": true
+  },
+  "sensor_type_overrides": {
+    "left": {
+      "heatmap_display": {
+        "display": {
+          "threshold": 100000.0,
+          "gamma": 0.1,
+          "log_strength": 10.0,
+          "smoothing": 3,
+          "sharpening": 1.0
+        },
+        "preprocessing": {
+          "signal_mask": 10.0,
+          "signal_high_mask": 0.0,
+          "final_signal_mask": 150.0,
+          "median_filter": {
+            "enabled": false,
+            "window": 3
+          },
+          "release_gate": {
+            "enabled": false,
+            "release_slope": 0.9,
+            "release_level": 50.0,
+            "rearm_slope": 0.5,
+            "rearm_level": 0.0,
+            "release_frames": 3,
+            "rearm_frames": 2
+          }
+        },
+        "temporal_filter": {
+          "enabled": false,
+          "window": 3
+        },
+        "baseline": {
+          "enabled": true,
+          "suppress_during_initializing": true,
+          "tracker": {
+            "window_size": 15,
+            "spike_multiplier": 10.0,
+            "contact_level_multiplier": 10.0,
+            "calm_diff_multiplier": 5.0,
+            "recovery_level_multiplier": 10.0,
+            "min_noise": 1.0,
+            "freeze_noise_after_ready": false,
+            "verbose": false
+          }
+        },
+        "std_filter": {
+          "enabled": true,
+          "subtract_multiplier": 1.0,
+          "update_interval": 1.0
+        },
+        "dynamic_threshold": {
+          "enabled": false,
+          "min_value": 5.0,
+          "smooth": 1.0
+        }
+      },
+      "state_transitions": {
+        "auto_grasp_trigger": {
+          "point_threshold": 1000.0,
+          "confirm_frames": 3
+        },
+        "contact_stop_trigger": {
+          "point_threshold": 250.0,
+          "contact_confirm_frames": 2
+        },
+        "auto_release_trigger": {
+          "delay_seconds": 1.0,
+          "baseline_frames": 8,
+          "point_change_threshold": 10000.0,
+          "point_change_ratio": 0.3,
+          "confirm_frames": 3,
+          "post_release_guard_seconds": 0.0,
+          "rapid_rise_window_seconds": 0.5,
+          "rapid_rise_threshold": 100.0,
+          "rapid_rise_confirm_frames": 3,
+          "release_heatmap_fall_seconds": 0.3,
+          "baseline_follow_time_constant_seconds": 30.0
+        },
+        "idle_std_refresh": {
+          "stable_duration": 1.0
+        }
+      },
+      "adaptive_grasper": {
+        "approach_step_pos": 20,
+        "approach_slow_step_pos": 20,
+        "approach_slow_guard_seconds": 1.0,
+        "approach_interval": 0.08,
+        "contact_frames": 15,
+        "min_force": 20,
+        "force_step": 4,
+        "force_step_small": 1,
+        "loop_interval": 0.09,
+        "spread_min_increase": 0.01,
+        "var_high_factor": 2.5,
+        "slip_cop_disp": 3.0,
+        "slip_ref_frames": 2,
+        "slip_vel_window": 8,
+        "slip_vel_disp": 1.5,
+        "slip_vel_min_r2": 0.75,
+        "slip_cumul_disp": 3.0,
+        "slip_min_cop_nz": 3,
+        "slip_loss_ratio": 0.4,
+        "slip_confirm_frames": 2,
+        "hold_interval": 0.01,
+        "max_position": 1000,
+        "open_position": 1000,
+        "release_stop_position": 1000,
+        "release_step_pos": 50,
+        "release_interval": 0.06,
+        "release_clear_point_threshold": 0.1,
+        "release_clear_confirm_frames": 3,
+        "release_zero_frames": 20,
+        "release_zero_timeout": 1.0,
+        "min_release_force": 100,
+        "min_grasp_position": 100
+      }
+    },
+    "right": {
+      "heatmap_display": {
+        "display": {
+          "threshold": 100000.0,
+          "gamma": 0.1,
+          "log_strength": 10.0,
+          "smoothing": 3,
+          "sharpening": 1.0
+        },
+        "preprocessing": {
+          "signal_mask": 150.0,
+          "signal_high_mask": 0.0,
+          "final_signal_mask": 150.0,
+          "median_filter": {
+            "enabled": false,
+            "window": 2
+          },
+          "release_gate": {
+            "enabled": true,
+            "release_slope": 0.3,
+            "release_level": 300.0,
+            "rearm_slope": 0.5,
+            "rearm_level": 0.0,
+            "release_frames": 2,
+            "rearm_frames": 2
+          }
+        },
+        "temporal_filter": {
+          "enabled": false,
+          "window": 3
+        },
+        "baseline": {
+          "enabled": true,
+          "suppress_during_initializing": true,
+          "tracker": {
+            "window_size": 15,
+            "spike_multiplier": 10.0,
+            "contact_level_multiplier": 10.0,
+            "calm_diff_multiplier": 5.0,
+            "recovery_level_multiplier": 10.0,
+            "min_noise": 5.0,
+            "freeze_noise_after_ready": false,
+            "verbose": false
+          }
+        },
+        "std_filter": {
+          "enabled": true,
+          "subtract_multiplier": 1.0,
+          "update_interval": 1.0
+        },
+        "dynamic_threshold": {
+          "enabled": false,
+          "min_value": 5.0,
+          "smooth": 1.0
+        }
+      },
+      "state_transitions": {
+        "auto_grasp_trigger": {
+          "point_threshold": 1000.0,
+          "confirm_frames": 3
+        },
+        "contact_stop_trigger": {
+          "point_threshold": 250.0,
+          "contact_confirm_frames": 2
+        },
+        "auto_release_trigger": {
+          "delay_seconds": 1.0,
+          "baseline_frames": 8,
+          "point_change_threshold": 10000.0,
+          "point_change_ratio": 0.3,
+          "confirm_frames": 3,
+          "post_release_guard_seconds": 0.0,
+          "rapid_rise_window_seconds": 0.5,
+          "rapid_rise_threshold": 100.0,
+          "rapid_rise_confirm_frames": 3,
+          "release_heatmap_fall_seconds": 0.3,
+          "baseline_follow_time_constant_seconds": 30.0
+        },
+        "idle_std_refresh": {
+          "stable_duration": 1.0
+        }
+      },
+      "adaptive_grasper": {
+        "approach_step_pos": 20,
+        "approach_slow_step_pos": 20,
+        "approach_slow_guard_seconds": 1.0,
+        "approach_interval": 0.08,
+        "contact_frames": 15,
+        "min_force": 20,
+        "force_step": 4,
+        "force_step_small": 1,
+        "loop_interval": 0.09,
+        "spread_min_increase": 0.01,
+        "var_high_factor": 2.5,
+        "slip_cop_disp": 3.0,
+        "slip_ref_frames": 2,
+        "slip_vel_window": 8,
+        "slip_vel_disp": 1.5,
+        "slip_vel_min_r2": 0.75,
+        "slip_cumul_disp": 3.0,
+        "slip_min_cop_nz": 3,
+        "slip_loss_ratio": 0.4,
+        "slip_confirm_frames": 2,
+        "hold_interval": 0.01,
+        "max_position": 1000,
+        "open_position": 1000,
+        "release_stop_position": 1000,
+        "release_step_pos": 50,
+        "release_interval": 0.06,
+        "release_clear_point_threshold": 0.1,
+        "release_clear_confirm_frames": 3,
+        "release_zero_frames": 20,
+        "release_zero_timeout": 1.0,
+        "min_release_force": 100,
+        "min_grasp_position": 100
+      }
+    }
+  }
+}

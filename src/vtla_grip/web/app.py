@@ -106,6 +106,7 @@ class VisionDetectRequest(BaseModel):
 class TransferPreviewRequest(BaseModel):
     action: str = "place_into_tray"
     target_class: str
+    target_property: str | None = None
 
 
 class TransferExecuteRequest(BaseModel):
@@ -449,6 +450,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 state.config.transfer,
                 solution,
                 destination_override=destination_override,
+                target_property=request.target_property,
             )
             status = state.transfer.set_preview(plan)
             state.logs.add(

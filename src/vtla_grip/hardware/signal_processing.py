@@ -47,7 +47,6 @@ class SensorSignalProcessor:
         self.final_signal_mask = max(0.0, float(preprocessing.get("final_signal_mask", 0.0)))
         self.release_enabled = bool(release.get("enabled", False))
         self.release_slope = float(release.get("release_slope", 0.5))
-        self.release_drop_abs = float(release.get("release_drop_abs", 0.0))
         self.release_level = float(release.get("release_level", 0.0))
         self.rearm_slope = float(release.get("rearm_slope", 0.5))
         self.rearm_level = float(release.get("rearm_level", 0.0))
@@ -162,12 +161,9 @@ class SensorSignalProcessor:
                 else:
                     result[index] = 0.0
             else:
-                drop = old - new
-                ratio = drop / max(abs(old), 1e-6)
-                level_ok = self.release_level <= 0 or new <= self.release_level
-                drop_ok = ratio >= self.release_slope or (
-                    self.release_drop_abs > 0 and drop > self.release_drop_abs
-                )
+                ratio = (old - new) / max(abs(old), 1e-6)
+                level_ok = self.release_level > 0 and new < self.release_level
+                drop_ok = ratio >= self.release_slope
                 self._release_counts[index] = (
                     self._release_counts[index] + 1 if level_ok and drop_ok else 0
                 )
@@ -181,6 +177,7 @@ class SensorSignalProcessor:
     def debug_state(self) -> dict[str, Any]:
         return {
             "baseline_ready": self.baseline_ready,
+            "baseline_enabled": self.baseline_enabled,
             "display_threshold": self.display_threshold,
             "baseline_mean": float(self._baseline.mean()),
             "noise_mean": float(self._noise.mean()),
@@ -241,3 +238,15 @@ class GraspSuccessJudge:
             "left_threshold": left_threshold,
             "right_threshold": right_threshold,
         }
+
+
+def bilateral_contact_ready(data: dict[str, Any]) -> bool:
+    """Accept only fresh, baseline-ready bilateral contact for capture and inference."""
+    features = data.get("features") or {}
+    grasp = data.get("grasp_success") or {}
+    return bool(
+        data.get("frame_ready")
+        and all((features.get(side) or {}).get("baseline_ready") for side in ("left", "right"))
+        and grasp.get("both_sides_over_threshold")
+        and grasp.get("success")
+    )

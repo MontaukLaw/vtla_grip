@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import struct
 import threading
 import time
@@ -78,6 +79,7 @@ class DH5Gripper:
         self._serial: serial.Serial | None = None
         self._lock = threading.RLock()
         self._last_error: str | None = None
+        self._last_transaction: dict[str, Any] | None = None
 
     @property
     def connected(self) -> bool:
@@ -99,7 +101,7 @@ class DH5Gripper:
                     baudrate=self.config.baud_rate,
                     stopbits=self.config.stop_bits,
                     parity=self.config.parity,
-                    timeout=0.2,
+                    timeout=0.5,
                     write_timeout=0.5,
                     inter_byte_timeout=0.02,
                 )
@@ -134,6 +136,7 @@ class DH5Gripper:
             "baud_rate": self.config.baud_rate,
             "modbus_id": self.config.modbus_id,
             "last_error": self._last_error,
+            "last_transaction": self._last_transaction,
         }
         if read_feedback and self.connected:
             result["feedback"] = asdict(self.feedback())
@@ -170,6 +173,10 @@ class DH5Gripper:
             self._write_multiple(0x0101, [value])
         return {"force_command": value}
 
+    def read_position(self) -> int:
+        with self._lock:
+            return self._read(0x0202, 1)[0]
+
     def feedback(self) -> DH5Feedback:
         with self._lock:
             return DH5Feedback(
@@ -180,16 +187,81 @@ class DH5Gripper:
             )
 
     def _exchange(self, request: bytes, response_length: int, function_code: int) -> list[int]:
-        if not self.connected or self._serial is None:
-            raise DH5ProtocolError("DH5 gripper is not connected")
+        address = struct.unpack(">H", request[2:4])[0]
+        # Repeating reads or absolute settings is safe; initialization is not retried.
+        maximum = 3 if function_code == 0x03 or (
+            function_code in (0x06, 0x10) and address in (0x0101, 0x0103, 0x0104)
+        ) else 1
+        errors: list[str] = []
+        started = time.monotonic()
+        for attempt in range(1, maximum + 1):
+            try:
+                result = self._exchange_once(request, response_length, function_code)
+            except DH5ProtocolError as exc:
+                errors.append(str(exc))
+                cause = exc.__cause__
+                retryable = isinstance(cause, DH5ProtocolError) and any(
+                    marker in str(cause) for marker in (
+                        "incomplete", "CRC", "unexpected DH5", "payload length", "echo mismatch",
+                    )
+                )
+                self._last_transaction = {
+                    "attempts": attempt, "success": False, "errors": list(errors),
+                    "elapsed_ms": round((time.monotonic() - started) * 1000, 1),
+                }
+                if not retryable or attempt == maximum:
+                    self._last_error = f"DH5 通信失败，已尝试 {attempt} 次：" + " | ".join(errors)
+                    raise DH5ProtocolError(self._last_error) from exc
+                logging.getLogger(__name__).warning("DH5 重试 %s/%s：%s", attempt, maximum - 1, exc)
+                time.sleep(0.05)
+            else:
+                self._last_error = None
+                self._last_transaction = {
+                    "attempts": attempt, "success": True, "errors": list(errors),
+                    "elapsed_ms": round((time.monotonic() - started) * 1000, 1),
+                }
+                if errors:
+                    logging.getLogger(__name__).warning("DH5 通信在第 %s 次尝试恢复", attempt)
+                return result
+        raise AssertionError("unreachable")
+
+    def _exchange_once(self, request: bytes, response_length: int, function_code: int) -> list[int]:
+        address = struct.unpack(">H", request[2:4])[0]
+        operation = {
+            0x0100: "初始化", 0x0101: "设置力度", 0x0103: "设置位置（张开/闭合）",
+            0x0104: "设置速度", 0x0202: "读取位置", 0x0203: "读取速度",
+            0x0204: "读取电流", 0x021F: "读取故障码",
+        }.get(address, "寄存器操作")
+        values = []
+        if function_code == 0x06:
+            values = [struct.unpack(">H", request[4:6])[0]]
+        elif function_code == 0x10:
+            values = list(struct.unpack(f">{request[6] // 2}H", request[7:-2]))
+        started = time.monotonic()
+        response = b""
         try:
+            if not self.connected or self._serial is None:
+                raise DH5ProtocolError("DH5 gripper is not connected")
             self._serial.reset_input_buffer()
             self._serial.write(request)
             response = self._serial.read(response_length)
-        except (OSError, serial.SerialException) as exc:
-            self._last_error = str(exc)
-            raise DH5ProtocolError(f"DH5 serial transaction failed: {exc}") from exc
-        return parse_response(response, self.config.modbus_id, function_code)
+            result = parse_response(response, self.config.modbus_id, function_code)
+            if len(response) != response_length:
+                raise DH5ProtocolError("DH5 response is incomplete")
+            if function_code in (0x06, 0x10) and response[2:6] != request[2:6]:
+                raise DH5ProtocolError("DH5 response echo mismatch")
+            return result
+        except (OSError, serial.SerialException, DH5ProtocolError) as exc:
+            elapsed_ms = (time.monotonic() - started) * 1000.0
+            self._last_error = (
+                f"DH5 {operation}失败：{exc}; port={self.config.port}; "
+                f"slave={self.config.modbus_id}; function=0x{function_code:02X}; "
+                f"register=0x{address:04X}; values={values}; "
+                f"elapsed_ms={elapsed_ms:.1f}; expected_bytes={response_length}; "
+                f"received_bytes={len(response)}; tx={request.hex(' ')}; "
+                f"rx={response.hex(' ') or '<empty>'}"
+            )
+            raise DH5ProtocolError(self._last_error) from exc
 
     def _read(self, address: int, count: int) -> list[int]:
         request = build_read_request(self.config.modbus_id, address, count)

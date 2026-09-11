@@ -11,6 +11,8 @@ from typing import Any
 import numpy as np
 
 from .config import TargetingConfig, TransferConfig
+from .grasp_diagnostics import closure_snapshot
+from .hardware.signal_processing import bilateral_contact_ready
 from .tactile_recognition import TactileObjectRecognizer
 
 SUPPORTED_TRANSFER_TARGETS = ("green_cylinder", "gray_cube")
@@ -35,7 +37,10 @@ def build_transfer_plan(
     transfer: TransferConfig,
     calibration_solution: dict[str, Any],
     destination_override: dict[str, Any] | None = None,
+    target_property: str | None = None,
 ) -> dict[str, Any]:
+    if target_property not in (None, "软", "硬"):
+        raise TransferError("软硬要求必须为软、硬或不限")
     if target_class not in SUPPORTED_TRANSFER_TARGETS:
         raise TransferError(f"暂不支持搬运类别：{target_class}")
     source = vision_result.get("recommended_object")
@@ -75,7 +80,7 @@ def build_transfer_plan(
         return [*map(float, xyz.tolist()), *tool_orientation]
 
     created_at = datetime.now(UTC)
-    return {
+    plan = {
         "plan_id": uuid.uuid4().hex,
         "created_at": created_at.isoformat(timespec="milliseconds"),
         "created_timestamp": created_at.timestamp(),
@@ -116,6 +121,34 @@ def build_transfer_plan(
             f"垂直抬升到{destination_label}上方",
         ],
     }
+
+    if target_property is not None:
+        plan["command"]["target_property"] = target_property
+        candidates = [source]
+        seen = {source.get("detection_id")}
+        for item in vision_result.get("detections", []):
+            if (
+                item.get("class_name") == target_class
+                and item.get("graspable")
+                and not item.get("rejection_reason")
+                and item.get("detection_id") not in seen
+            ):
+                candidates.append(item)
+                seen.add(item.get("detection_id"))
+        plan["candidates"] = []
+        for candidate in candidates:
+            candidate_plan = build_transfer_plan(
+                {**vision_result, "recommended_object": candidate}, target_class,
+                targeting, transfer, calibration_solution, destination_override,
+            )
+            plan["candidates"].append({
+                key: candidate_plan[key] for key in ("source", "poses", "motion")
+            })
+        plan["steps"][4] = (
+            f"逐个夹持识别{len(candidates)}个候选，选择{target_property}物体；"
+            "不匹配则原位松开并抬升，全部不匹配则结束"
+        )
+    return plan
 
 
 class TransferTaskManager:
@@ -260,26 +293,53 @@ class TransferTaskManager:
         holding = False
         try:
             self._update(status="running")
-            self._step(plan["steps"][0], 0)
-            self._open_gripper()
-            self._prepare_sensors()
-
-            self._step(plan["steps"][1], 1)
-            self._move(poses["pick_above"], "MoveJ_P", motion["transit_speed"], motion)
-            self._step(plan["steps"][2], 2)
-            self._move(poses["pick"], "MoveL", motion["approach_speed"], motion)
-            self._step(plan["steps"][3], 3)
-            try:
-                grasp_result = self._grasp_until_contact()
-            except NoContactError:
+            target_property = plan["command"].get("target_property")
+            candidates = plan.get("candidates") or [plan]
+            self._update(attempts=[], candidate_count=len(candidates))
+            for index, candidate in enumerate(candidates):
+                poses, motion = candidate["poses"], candidate["motion"]
+                self._update(
+                    candidate_index=index + 1, current_source=candidate["source"],
+                    recognition_result=None,
+                )
+                self._step(plan["steps"][0], 0)
                 self._open_gripper()
+                self._prepare_sensors()
+                self._step(plan["steps"][1], 1)
+                self._move(poses["pick_above"], "MoveJ_P", motion["transit_speed"], motion)
+                self._step(plan["steps"][2], 2)
+                self._move(poses["pick"], "MoveL", motion["approach_speed"], motion)
+                self._step(plan["steps"][3], 3)
+                try:
+                    grasp_result = self._grasp_until_contact()
+                except NoContactError:
+                    self._open_gripper()
+                    self._move(poses["pick_above"], "MoveL", motion["approach_speed"], motion)
+                    raise
+                holding = True
+                self._update(holding_object=True, grasp_result=grasp_result)
+                self._step(plan["steps"][4], 4)
+                result = self._recognize_held_object(plan["command"]["target_class"], grasp_result)
+                matched = target_property is None or (
+                    result.get("status") == "completed"
+                    and result.get("property") == target_property
+                )
+                with self._lock:
+                    self._state["attempts"].append({
+                        "source": copy.deepcopy(candidate["source"]),
+                        "recognition_result": result, "matched": matched,
+                    })
+                if matched:
+                    break
+                self._step("软硬不匹配或识别失败，原位松开物体", 4)
+                self._open_gripper()
+                holding = False
+                self._update(holding_object=False)
                 self._move(poses["pick_above"], "MoveL", motion["approach_speed"], motion)
-                raise
-            holding = True
-            self._update(holding_object=True, grasp_result=grasp_result)
-
-            self._step(plan["steps"][4], 4)
-            self._recognize_held_object(plan["command"]["target_class"], grasp_result)
+                if result.get("status") != "completed":
+                    raise TransferError(f"触觉识别失败，已原位松开：{result.get('error', '无法判断软硬')}")
+            else:
+                raise TransferError(f"未找到匹配物体：{len(candidates)}个候选均不符合“{target_property}”要求")
             self._step(plan["steps"][5], 5)
             self._move(poses["pick_above"], "MoveL", motion["approach_speed"], motion)
             self._step(plan["steps"][6], 6)
@@ -300,9 +360,9 @@ class TransferTaskManager:
             )
             self._log("info", "结构化搬运任务完成", plan_id=plan["plan_id"])
         except TransferStopped as exc:
-            self._finish("stopped", str(exc), holding)
+            self._finish("stopped", str(exc), holding or self.status()["holding_object"])
         except Exception as exc:  # noqa: BLE001 - background task boundary records all failures.
-            self._finish("failed", str(exc), holding)
+            self._finish("failed", str(exc), holding or self.status()["holding_object"])
 
     def _step(self, label: str, completed_steps: int) -> None:
         self._check_stop()
@@ -312,7 +372,8 @@ class TransferTaskManager:
     def _move(self, pose: list[float], mode: str, speed: int, motion: dict[str, Any]) -> None:
         self._check_stop()
         self.robot.move(pose, mode, int(speed), int(motion["acceleration"]))
-        self._wait_for_arrival(pose)
+        if self.config.wait_for_arrival_feedback:
+            self._wait_for_arrival(pose)
         self._check_stop()
 
     def _wait_for_arrival(self, target_pose: list[float]) -> None:
@@ -349,50 +410,58 @@ class TransferTaskManager:
 
     def _open_gripper(self) -> None:
         self._check_stop()
+        self._update(current_step="夹爪完全张开，等待调零")
         self.gripper.set_force(self.config.gripper_force)
         self.gripper.set_speed(self.config.gripper_speed)
         self.gripper.set_position(self.config.gripper_open_position)
         self._wait(self.config.release_wait_s)
+        self._zero_after_open()
+
+    def _zero_after_open(self) -> None:
+        """Refresh the empty-gripper zero after the jaws have fully opened."""
+        try:
+            status = self.sensors.status() if hasattr(self.sensors, "status") else {}
+            if not status.get("frame_ready", True):
+                self._log("warning", "夹爪已张开，但双侧传感器没有新帧，跳过自动调零")
+                return
+            self.sensors.zero()
+            self._log("info", "夹爪完全张开后已自动调零")
+        except Exception as exc:  # noqa: BLE001 - zeroing must not trap an open gripper.
+            self._log("warning", "夹爪完全张开后自动调零失败", error=str(exc))
 
     def _prepare_sensors(self) -> None:
-        self.sensors.zero()
-        deadline = time.monotonic() + 3.0
-        while time.monotonic() < deadline:
-            self._check_stop()
-            data = self.sensors.data()
-            features = data.get("features") or {}
-            if all(
-                bool((features.get(side) or {}).get("baseline_ready")) for side in ("left", "right")
-            ):
-                return
-            self._wait(0.03)
-        raise TransferError("触觉传感器基线未能在 3 秒内稳定")
+        self._update(current_step="触觉调零完成，移动过程中建立双侧基线")
 
     def _grasp_until_contact(self) -> dict[str, Any]:
+        last_snapshot: dict[str, Any] = {}
         start = self.config.gripper_open_position
         stop = self.config.gripper_min_position
         step = max(1, self.config.gripper_close_step)
-        for position in range(start - step, stop - 1, -step):
+        positions = range(start - step, stop - 1, -step)
+        for position in positions:
             self._check_stop()
             command_position = max(stop, position)
             self.gripper.set_position(command_position)
             self._wait(self.config.grasp_poll_interval_s)
             data = self.sensors.data()
             grasp = data.get("grasp_success") or {}
-            if grasp.get("success"):
+            last_snapshot = closure_snapshot(self.gripper, data, command_position, stop)
+            self._update(last_closure=last_snapshot)
+            self._log("info", "夹爪闭合反馈", **last_snapshot)
+            if bilateral_contact_ready(data):
                 return {**grasp, "position_command": command_position}
             if command_position == stop:
                 break
-        raise NoContactError("夹爪到达最小位置仍未检测到双侧接触，物体已原位放回")
+        self._log("warning", "闭合指令序列结束但双侧接触未确认，即将自动松开", **last_snapshot)
+        raise NoContactError("闭合指令序列结束仍未确认双侧接触，执行自动松开；实际位置见闭合反馈日志")
 
     def _recognize_held_object(
         self, vision_class: str, grasp_result: dict[str, Any]
-    ) -> None:
+    ) -> dict[str, Any]:
         if self.recognizer is None:
-            self._update(
-                recognition_result={"status": "unavailable", "error": "未配置触觉识别器"}
-            )
-            return
+            payload = {"status": "unavailable", "error": "未配置触觉识别器"}
+            self._update(recognition_result=payload)
+            return payload
         started = time.monotonic()
         frames: list[list[float]] = []
         try:
@@ -402,7 +471,10 @@ class TransferTaskManager:
             duration = max(0.1, float(model.get("capture_duration_seconds", 1.0)))
             while time.monotonic() - started < duration:
                 self._check_stop()
-                processed = self.sensors.data().get("processed")
+                data = self.sensors.data()
+                if not bilateral_contact_ready(data):
+                    raise RuntimeError("识别时双侧接触丢失或传感器数据失效")
+                processed = data.get("processed")
                 if isinstance(processed, list) and len(processed) >= 64:
                     frames.append([float(value) for value in processed[:64]])
                 self._wait(0.012)
@@ -441,7 +513,9 @@ class TransferTaskManager:
                 "capture_duration_s": time.monotonic() - started,
             }
             self._update(recognition_result=payload)
-            self._log("warning", "抓取后触觉识别失败，继续执行搬运", **payload)
+            self._log("warning", "抓取后触觉识别失败", **payload)
+
+        return payload
 
     def _check_stop(self) -> None:
         if self._stop.is_set():

@@ -65,6 +65,57 @@ class FakeSerial:
         self.is_open = False
 
 
+@pytest.mark.parametrize("method,value,register,label", [
+    ("set_force", 50, "0x0101", "设置力度"),
+    ("set_speed", 20, "0x0104", "设置速度"),
+    ("set_position", 1000, "0x0103", "设置位置"),
+])
+def test_empty_reply_identifies_failed_release_command(method, value, register, label):
+    gripper = DH5Gripper(GripperConfig(port="COM_BAD"))
+    gripper._serial = FakeSerial(port="COM_BAD")
+    with pytest.raises(DH5ProtocolError) as failure:
+        getattr(gripper, method)(value)
+    message = str(failure.value)
+    assert label in message
+    assert f"register={register}" in message
+    assert f"values=[{value}]" in message
+    assert "received_bytes=0" in message
+    assert "rx=<empty>" in message
+    assert "elapsed_ms=" in message
+    assert gripper.status()["last_error"] == message
+    assert len(gripper._serial.writes) == 3
+    assert gripper.status()["last_transaction"]["attempts"] == 3
+
+
+def test_transient_timeout_recovers_without_aborting_command():
+    class RecoveringSerial(FakeSerial):
+        def read(self, length):
+            if len(self.writes) < 3:
+                return b""
+            return with_crc(self.writes[-1][:6])
+
+    gripper = DH5Gripper(GripperConfig(port="COM50"))
+    gripper._serial = RecoveringSerial(port="COM50")
+    assert gripper.set_position(700) == {"position_command": 700}
+    status = gripper.status()
+    assert status["last_error"] is None
+    assert status["last_transaction"]["success"]
+    assert len(status["last_transaction"]["errors"]) == 2
+    assert len(gripper._serial.writes) == 3
+
+
+def test_device_exception_is_not_retried():
+    class RejectingSerial(FakeSerial):
+        def read(self, length):
+            return with_crc(bytes.fromhex("01 90 02"))
+
+    gripper = DH5Gripper(GripperConfig(port="COM50"))
+    gripper._serial = RejectingSerial(port="COM50")
+    with pytest.raises(DH5ProtocolError, match="exception code: 2"):
+        gripper.set_position(700)
+    assert len(gripper._serial.writes) == 1
+
+
 def test_connect_requires_a_valid_read_only_dh5_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     created: list[FakeSerial] = []
 
@@ -82,7 +133,8 @@ def test_connect_requires_a_valid_read_only_dh5_probe(monkeypatch: pytest.Monkey
     assert gripper.connected is False
     assert created[0].is_open is False
     assert created[0].kwargs["write_timeout"] == 0.5
-    assert created[0].writes == [build_read_request(1, 0x021F, 1)]
+    assert created[0].kwargs["timeout"] == 0.5
+    assert created[0].writes == [build_read_request(1, 0x021F, 1)] * 3
 
 
 def test_changing_port_closes_old_connection_and_reconnects(

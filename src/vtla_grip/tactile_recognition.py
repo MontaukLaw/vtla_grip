@@ -416,6 +416,8 @@ class TactileRecognitionWorkspace:
             "vision_class": raw.get("vision_class"), "property": raw.get("property"),
             "duration_seconds": raw.get("duration_seconds"),
             "final_gripper_position": raw.get("final_gripper_position"),
+            "left_peak": max((max(frame[:32], default=0.0) for frame in raw.get("frames", [])), default=0.0),
+            "right_peak": max((max(frame[32:64], default=0.0) for frame in raw.get("frames", [])), default=0.0),
             "frame_count": len(raw.get("frames") or []),
         }
 

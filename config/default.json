@@ -44,9 +44,9 @@
   },
   "targeting": {
     "marker_to_tip_xyz_mm": [
-      10.0,
-      30.0,
-      220.0
+      0.0,
+      20.0,
+      210.0
     ],
     "maximum_speed": 100
   },
@@ -55,8 +55,8 @@
     "pick_lift_mm": 100.0,
     "place_approach_mm": 110.0,
     "place_clearance_mm": 10.0,
-    "transit_speed": 50,
-    "approach_speed": 50,
+    "transit_speed": 80,
+    "approach_speed": 100,
     "acceleration": 10,
     "preview_ttl_s": 120.0,
     "gripper_open_position": 1000,
@@ -65,12 +65,13 @@
     "gripper_speed": 20,
     "gripper_force": 50,
     "grasp_poll_interval_s": 0.1,
-    "release_wait_s": 0.5,
+    "release_wait_s": 0.0,
     "arrival_position_tolerance_mm": 3.0,
     "arrival_orientation_tolerance_deg": 2.0,
-    "arrival_stable_frames": 3,
+    "arrival_stable_frames": 1,
     "arrival_timeout_s": 10.0,
-    "arrival_poll_interval_s": 0.1
+    "arrival_poll_interval_s": 0.1,
+    "wait_for_arrival_feedback": false
   },
   "vision": {
     "roi_xyxy": [

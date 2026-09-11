@@ -9,6 +9,8 @@ from typing import Any
 import numpy as np
 
 from .config import TransferConfig
+from .grasp_diagnostics import closure_snapshot
+from .hardware.signal_processing import bilateral_contact_ready
 from .tactile_recognition import TactileRecognitionWorkspace
 
 
@@ -140,34 +142,32 @@ class TactileCaptureManager:
 
             self._update(current_step="触觉调零")
             self.sensors.zero()
-            deadline = time.monotonic() + 3.0
-            while time.monotonic() < deadline:
-                self._check_stop()
-                features = self.sensors.data().get("features") or {}
-                if all(bool((features.get(side) or {}).get("baseline_ready")) for side in ("left", "right")):
-                    break
-                self._wait(0.03)
-            else:
-                raise RuntimeError("触觉传感器基线未能在 3 秒内稳定")
+            self._update(current_step="触觉调零完成，闭合过程中建立双侧基线")
 
             self._update(current_step="逐步闭合并等待双侧接触")
             contact_data: dict[str, Any] | None = None
+            last_snapshot: dict[str, Any] = {}
             start = self.config.gripper_open_position
             stop = self.config.gripper_min_position
             step = max(1, self.config.gripper_close_step)
-            for position in range(start - step, stop - 1, -step):
+            positions = range(start - step, stop - 1, -step)
+            for position in positions:
                 self._check_stop()
                 command_position = max(stop, position)
                 self.gripper.set_position(command_position)
                 self._wait(self.config.grasp_poll_interval_s)
                 data = self.sensors.data()
-                if (data.get("grasp_success") or {}).get("success"):
+                last_snapshot = closure_snapshot(self.gripper, data, command_position, stop)
+                self._update(last_closure=last_snapshot)
+                self._log("info", "夹爪闭合反馈", **last_snapshot)
+                if bilateral_contact_ready(data):
                     contact_data = data
                     break
                 if command_position == stop:
                     break
             if contact_data is None:
-                raise RuntimeError("夹爪到达最小位置仍未检测到双侧接触")
+                self._log("warning", "闭合指令序列结束但双侧接触未确认，即将自动松开", **last_snapshot)
+                raise RuntimeError("闭合指令序列结束仍未确认双侧接触，执行自动松开；实际位置见闭合反馈日志")
 
             self._update(current_step="保持夹爪并采集触觉序列")
             capture_started = time.monotonic()
@@ -175,6 +175,8 @@ class TactileCaptureManager:
             while time.monotonic() - capture_started < duration:
                 self._check_stop()
                 data = contact_data if not frames else self.sensors.data()
+                if not bilateral_contact_ready(data):
+                    raise RuntimeError("采集中双侧接触丢失或传感器数据失效，请重新夹取")
                 processed = data.get("processed")
                 if isinstance(processed, list) and len(processed) >= 64:
                     frames.append([float(value) for value in processed[:64]])
@@ -194,6 +196,11 @@ class TactileCaptureManager:
             self._update(current_step="采集完成，正在松开夹爪")
             self.gripper.set_position(self.config.gripper_open_position)
             self._wait(self.config.release_wait_s)
+            try:
+                self.sensors.zero()
+                self._log("info", "触觉采集完成后夹爪已张开并自动调零")
+            except Exception as exc:  # noqa: BLE001 - keep the captured sample available.
+                self._log("warning", "触觉采集完成后自动调零失败", error=str(exc))
             curves = self._curves(frames, timestamps)
             with self._lock:
                 self._pending = {

@@ -27,6 +27,9 @@ export type SensorsState = {
 };
 export type SensorData = SensorsState & {
   raw: number[] | null;
+  zeroed_at?: number | null;
+  zero_offset?: number[];
+  frame_ids?: number[];
   processed: number[] | null;
   display: number[] | null;
   features: { left: SensorFeatures; right: SensorFeatures } | null;
@@ -37,6 +40,7 @@ export type SensorFeatures = {
   max: number;
   nonzero: number;
   baseline_ready: boolean;
+  baseline_enabled?: boolean;
   display_threshold: number;
   baseline_mean: number;
   noise_mean: number;
@@ -143,6 +147,7 @@ export type TransferPlan = {
   command: {
     action: "place_into_tray" | "place_at_position";
     target_class: "green_cylinder" | "gray_cube";
+    target_property?: "软" | "硬";
     destination_class: "green_tray" | "specified_position";
   };
   source: Pick<
@@ -180,6 +185,7 @@ export type TransferPlan = {
     place_clearance_mm: number;
     source_height_above_table_mm: number;
   };
+  candidates?: Pick<TransferPlan, "source" | "poses" | "motion">[];
   steps: string[];
 };
 export type TransferStatus = {
@@ -200,6 +206,13 @@ export type TransferStatus = {
   started_at: string | null;
   finished_at: string | null;
   plan: TransferPlan | null;
+  candidate_index?: number;
+  candidate_count?: number;
+  attempts?: {
+    source: TransferPlan["source"];
+    recognition_result: { status: string; property?: string; error?: string };
+    matched: boolean;
+  }[];
   grasp_result?: Record<string, unknown>;
   recognition_result?: {
     status: "completed" | "failed" | "unavailable";
@@ -272,6 +285,8 @@ export type TactileStatus = {
   training: TactileTrainingStatus;
 };
 export type TactileSample = {
+  left_peak: number;
+  right_peak: number;
   sample_id: string;
   captured_at: string;
   vision_class: string;

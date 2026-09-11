@@ -78,15 +78,7 @@ FIELDS: list[Field] = [
         "float",
     ),
     (
-        "最大下降固定值",
-        "预处理/基线",
-        "heatmap_display.preprocessing.release_gate.release_drop_abs",
-        0,
-        100000,
-        "float",
-    ),
-    (
-        "松开低位阈值",
+        "最小释放值",
         "预处理/基线",
         "heatmap_display.preprocessing.release_gate.release_level",
         0,

@@ -225,6 +225,7 @@ class DualInfineonSensors:
         self._last_processed_ids = (-1, -1)
         self._last_payload: dict[str, Any] | None = None
         self._zero = np.zeros(64, dtype=np.float64)
+        self._zeroed_at: float | None = None
         self._lock = threading.RLock()
 
     def connect(
@@ -257,6 +258,7 @@ class DualInfineonSensors:
             raise SensorProtocolError("both sensor frames must be ready before zeroing")
         with self._lock:
             self._zero = np.asarray(raw, dtype=np.float64)
+            self._zeroed_at = time.time()
             self._left_processor.reset()
             self._right_processor.reset()
             self._grasp_judge.reset()
@@ -267,6 +269,7 @@ class DualInfineonSensors:
     def clear_zero(self) -> dict[str, Any]:
         with self._lock:
             self._zero[:] = 0.0
+            self._zeroed_at = None
             self._left_processor.reset()
             self._right_processor.reset()
             self._grasp_judge.reset()
@@ -293,8 +296,12 @@ class DualInfineonSensors:
         }
 
     def data(self) -> dict[str, Any]:
+        status = self.status()
         raw = self._raw_frame()
-        if raw is None:
+        if raw is None or not status["frame_ready"]:
+            with self._lock:
+                self._grasp_judge.reset()
+                self._last_payload = None
             return {
                 **self.status(),
                 "raw": None,
@@ -305,7 +312,10 @@ class DualInfineonSensors:
             }
         with self._lock:
             frame_ids = (self.left.frame_id(), self.right.frame_id())
-            if frame_ids == self._last_processed_ids and self._last_payload is not None:
+            if (
+                any(current == previous for current, previous in zip(frame_ids, self._last_processed_ids))
+                and self._last_payload is not None
+            ):
                 return {**self.status(), **self._last_payload}
             zeroed = np.asarray(raw) - self._zero
             left_values, left_display, left_debug = self._left_processor.process(
@@ -323,6 +333,9 @@ class DualInfineonSensors:
             )
             payload = {
                 "raw": raw,
+                "zeroed_at": self._zeroed_at,
+                "zero_offset": self._zero.tolist(),
+                "frame_ids": list(frame_ids),
                 "processed": processed.tolist(),
                 "display": display,
                 "features": {

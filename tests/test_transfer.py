@@ -5,7 +5,11 @@ import time
 import pytest
 
 from vtla_grip.config import TargetingConfig, TransferConfig
-from vtla_grip.transfer import TransferError, TransferTaskManager, build_transfer_plan
+from vtla_grip.transfer import (
+    TransferError,
+    TransferTaskManager,
+    build_transfer_plan,
+)
 
 
 def _vision_result() -> dict:
@@ -141,16 +145,19 @@ class _Sensors:
         self.contact_after = contact_after
 
     def zero(self) -> dict:
+        self.zero_count = getattr(self, "zero_count", 0) + 1
         return {}
 
     def data(self) -> dict:
         self.reads += 1
         return {
+            "frame_ready": True,
             "features": {
                 "left": {"baseline_ready": True},
                 "right": {"baseline_ready": True},
             },
             "grasp_success": {
+                "both_sides_over_threshold": self.contact_after is not None and self.reads >= self.contact_after,
                 "success": self.contact_after is not None and self.reads >= self.contact_after
             },
             "processed": [float(self.reads)] * 64,
@@ -210,6 +217,7 @@ def test_transfer_manager_runs_confirmed_plan_in_safe_order() -> None:
     assert status["recognition_result"]["vision_class"] == "gray_cube"
     assert status["recognition_result"]["property"] == "软"
     assert status["recognition_result"]["confidence"] == 0.9
+    assert manager.sensors.zero_count >= 2
 
 
 def test_gripper_does_not_close_until_robot_arrival_is_confirmed() -> None:
@@ -236,6 +244,7 @@ def test_gripper_does_not_close_until_robot_arrival_is_confirmed() -> None:
             arrival_stable_frames=1,
             arrival_timeout_s=1.0,
             arrival_poll_interval_s=0.001,
+            wait_for_arrival_feedback=True,
         ),
     )
     plan = build_transfer_plan(
@@ -260,7 +269,27 @@ def test_gripper_does_not_close_until_robot_arrival_is_confirmed() -> None:
     assert any(position < manager.config.gripper_open_position for position in gripper.positions)
 
 
-def test_no_contact_opens_gripper_and_returns_above_pick() -> None:
+def test_move_does_not_poll_arrival_feedback_by_default() -> None:
+    class CountingRobot(_Robot):
+        def __init__(self) -> None:
+            super().__init__()
+            self.pose_reads = 0
+
+        def pose(self) -> dict:
+            self.pose_reads += 1
+            return super().pose()
+
+    robot = CountingRobot()
+    manager = TransferTaskManager(robot, _Gripper(), _Sensors(), TransferConfig())
+
+    manager._move([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], "MoveL", 5, {
+        "acceleration": 10,
+    })
+
+    assert robot.pose_reads == 0
+
+
+def test_no_contact_releases_after_command_sequence() -> None:
     robot = _Robot()
     gripper = _Gripper()
     manager = TransferTaskManager(
@@ -284,12 +313,24 @@ def test_no_contact_opens_gripper_and_returns_above_pick() -> None:
     while manager.running and time.monotonic() < deadline:
         time.sleep(0.005)
 
+    manager._thread.join(timeout=1)
     status = manager.status()
     assert status["status"] == "failed"
-    assert "双侧接触" in status["error"]
+    assert "双侧接触" in (status["error"] or "")
     assert status["holding_object"] is False
-    assert gripper.positions[-1] == 1000
+    assert gripper.positions[-1] == manager.config.gripper_open_position
     assert [mode for mode, _ in robot.moves] == ["MoveJ_P", "MoveL", "MoveL"]
+
+
+def test_no_contact_sends_each_close_position_once():
+    gripper = _Gripper()
+    manager = TransferTaskManager(
+        _Robot(), gripper, _Sensors(contact_after=None),
+        TransferConfig(gripper_min_position=700, gripper_close_step=100, grasp_poll_interval_s=0),
+    )
+    with pytest.raises(Exception, match="双侧接触"):
+        manager._grasp_until_contact()
+    assert gripper.positions == [900, 800, 700]
 
 
 def test_updating_transfer_config_invalidates_old_preview() -> None:
@@ -304,3 +345,111 @@ def test_updating_transfer_config_invalidates_old_preview() -> None:
     assert status["status"] == "idle"
     assert status["plan"] is None
     assert manager.config.pick_lift_mm == 140.0
+
+
+def _two_candidate_plan(config, target_property="软"):
+    vision = _vision_result()
+    first = {**vision["recommended_object"], "graspable": True}
+    second = {
+        **first, "detection_id": "object-2", "base_xyz_mm": [60.0, 20.0, 5.0],
+        "height_above_table_mm": 55.0,
+    }
+    vision["detections"] = [
+        first, second, {**second, "detection_id": "blocked", "graspable": False},
+        {**second, "detection_id": "other", "class_name": "green_cylinder"},
+    ]
+    return build_transfer_plan(
+        vision, "gray_cube", TargetingConfig(), config, _solution(),
+        target_property=target_property,
+    )
+
+
+@pytest.mark.parametrize("properties,expected_status,attempts", [
+    (["软"], "completed", 1),
+    (["硬", "软"], "completed", 2),
+    (["硬", "硬"], "failed", 2),
+    (["error"], "failed", 1),
+])
+def test_property_selection_only_transports_verified_match(properties, expected_status, attempts):
+    class SequenceRecognizer(_Recognizer):
+        def predict(self, vision_class, frames, final_gripper_position):
+            label = properties.pop(0)
+            if label == "error":
+                raise RuntimeError("测试识别失败")
+            result = super().predict(vision_class, frames, final_gripper_position)
+            result.property = label
+            return result
+
+    robot = _Robot()
+    releases = []
+
+    class RecordingGripper(_Gripper):
+        def set_position(self, value):
+            if value == 1000:
+                releases.append(robot.moves[-1][1] if robot.moves else None)
+            return super().set_position(value)
+
+    gripper = RecordingGripper()
+    config = TransferConfig(
+        release_wait_s=0, grasp_poll_interval_s=0, gripper_close_step=100,
+        arrival_stable_frames=1,
+    )
+    manager = TransferTaskManager(robot, gripper, _Sensors(), config, recognizer=SequenceRecognizer())
+    plan = _two_candidate_plan(config)
+    assert len(plan["candidates"]) == 2
+    assert plan["command"]["target_property"] == "软"
+    manager.set_preview(plan)
+    manager._run(plan)
+    status = manager.status()
+    assert status["status"] == expected_status
+    assert not status["holding_object"]
+    assert len(status["attempts"]) == attempts
+    assert not properties
+    assert gripper.positions[-1] == config.gripper_open_position
+    if attempts == 2:
+        assert releases[1] == plan["candidates"][0]["poses"]["pick"]
+        # Release at original pick height, retreat vertically before approaching candidate 2.
+        assert robot.moves[2] == ("MoveL", plan["candidates"][0]["poses"]["pick_above"])
+        assert robot.moves[3] == ("MoveJ_P", plan["candidates"][1]["poses"]["pick_above"])
+    if expected_status == "completed":
+        selected = plan["candidates"][attempts - 1]
+        assert robot.moves[-2] == ("MoveL", selected["poses"]["place"])
+        assert status["attempts"][-1]["matched"]
+    else:
+        assert len(robot.moves) == 3 * attempts
+        assert releases[-1] == plan["candidates"][attempts - 1]["poses"]["pick"]
+        assert status["error"]
+
+
+def test_invalid_property_is_rejected():
+    with pytest.raises(TransferError, match="软硬要求"):
+        _two_candidate_plan(TransferConfig(), "未知")
+
+
+def test_unrestricted_plan_keeps_single_recommended_object():
+    plan = _two_candidate_plan(TransferConfig(), None)
+    assert "candidates" not in plan
+    assert "target_property" not in plan["command"]
+
+
+def test_stop_during_recognition_preserves_grip_and_does_not_try_next_candidate():
+    robot, gripper = _Robot(), _Gripper()
+    config = TransferConfig(
+        release_wait_s=0, grasp_poll_interval_s=0, arrival_stable_frames=1,
+    )
+
+    class StoppingRecognizer(_Recognizer):
+        def predict(self, vision_class, frames, final_gripper_position):
+            manager.request_stop()
+            result = super().predict(vision_class, frames, final_gripper_position)
+            result.property = "硬"
+            return result
+
+    manager = TransferTaskManager(robot, gripper, _Sensors(), config, recognizer=StoppingRecognizer())
+    plan = _two_candidate_plan(config)
+    manager.set_preview(plan)
+    manager._run(plan)
+    assert manager.status()["status"] == "stopped"
+    assert manager.status()["holding_object"]
+    assert len(robot.moves) == 2
+    assert gripper.positions[-1] < config.gripper_open_position

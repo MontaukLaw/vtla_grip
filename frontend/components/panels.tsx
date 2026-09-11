@@ -824,18 +824,26 @@ function SensorsPanel({ devices, action }: PanelContext) {
           </div>
         </div>
       )}
-      <div className="mt-5 grid grid-cols-2 gap-5 border-t border-[#294550] pt-5">
+      <div className="mt-3 text-xs leading-5 text-[#91a4ac]">
+        <div>最近空载置零：{data?.zeroed_at ? new Date(data.zeroed_at * 1000).toLocaleString() : "本次连接尚无手动置零记录"}</div>
+        <div>原始读数包含零点偏置；接触和采集使用扣除基线后的处理值。空载残余明显时，请在完全张开且无接触时置零。</div>
+      </div>
+      <div className="mt-5 grid grid-cols-1 gap-5 border-t border-[#294550] pt-5">
         <SensorHeatmap
           title="左侧 8×4"
           values={display?.slice(0, 32) ?? null}
           fps={data?.left.fps ?? 0}
           features={data?.features?.left}
+          raw={data?.raw?.slice(0, 32)}
+          processed={data?.processed?.slice(0, 32)}
         />
         <SensorHeatmap
           title="右侧 8×4"
           values={display?.slice(32, 64) ?? null}
           fps={data?.right.fps ?? 0}
           features={data?.features?.right}
+          raw={data?.raw?.slice(32, 64)}
+          processed={data?.processed?.slice(32, 64)}
         />
       </div>
       {!data?.frame_ready && (
@@ -1154,11 +1162,11 @@ function TactileRecognitionPanel({ devices, busy, action }: PanelContext) {
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
             <div className="max-h-64 overflow-auto rounded-md border border-[#203740]">
               <table className="w-full text-left text-[11px]">
-                <thead className="sticky top-0 bg-[#0d1d24] text-[#708790]"><tr><th className="px-3 py-2">时间</th><th>性质</th><th>闭合值</th><th>帧数</th><th /></tr></thead>
+                <thead className="sticky top-0 bg-[#0d1d24] text-[#708790]"><tr><th className="px-3 py-2">时间</th><th>性质</th><th>左压力峰值</th><th>右压力峰值</th><th /></tr></thead>
                 <tbody>
                   {samples.map((sample) => (
                     <tr key={sample.sample_id} className="cursor-pointer border-t border-[#1c333d] text-[#a9bbc2] hover:bg-[#10232b]" onClick={() => void openSample(sample)}>
-                      <td className="px-3 py-2 font-mono">{new Date(sample.captured_at).toLocaleString()}</td><td>{sample.property}</td><td>{sample.final_gripper_position ?? "—"}</td><td>{sample.frame_count}</td>
+                      <td className="px-3 py-2 font-mono">{new Date(sample.captured_at).toLocaleString()}</td><td>{sample.property}</td><td>{sample.left_peak?.toFixed(1) ?? "—"}</td><td>{sample.right_peak?.toFixed(1) ?? "—"}</td>
                       <td><button type="button" className="p-2 text-[#ff8e93]" onClick={(event) => { event.stopPropagation(); deleteSample(sample); }}><Trash2 className="size-3.5" /></button></td>
                     </tr>
                   ))}
@@ -1214,16 +1222,31 @@ function sampleCurves(sample: TactileSampleDetail) {
 }
 
 function TactileCurves({ curves }: { curves: { time: number[]; left_sum: number[]; right_sum: number[]; left_peak: number[]; right_peak: number[] } }) {
-  const values = [...curves.left_sum, ...curves.right_sum];
-  const maximum = Math.max(1, ...values);
-  const points = (series: number[]) => series.map((value, index) => `${(index / Math.max(1, series.length - 1)) * 100},${44 - (value / maximum) * 40}`).join(" ");
+  const maximum = Math.max(1, ...curves.left_peak, ...curves.right_peak);
+  const duration = Math.max(0.001, ...curves.time);
   return (
-    <div className="mt-3 rounded-md border border-[#203740] bg-[#050d11] p-2">
-      <div className="mb-1 flex gap-4 text-[10px]"><span className="text-[#42e7bd]">左侧压力和</span><span className="text-[#6ea8ff]">右侧压力和</span></div>
-      <svg viewBox="0 0 100 48" className="h-36 w-full" preserveAspectRatio="none" aria-label="触觉压力曲线">
-        <polyline points={points(curves.left_sum)} fill="none" stroke="#42e7bd" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
-        <polyline points={points(curves.right_sum)} fill="none" stroke="#6ea8ff" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
-      </svg>
+    <div className="mt-3 space-y-3">
+      {([
+        ["左传感器", curves.left_peak, "#42e7bd"],
+        ["右传感器", curves.right_peak, "#6ea8ff"],
+      ] as const).map(([label, series, color]) => (
+        <div key={label} className="rounded-md border border-[#203740] bg-[#050d11] p-3">
+          <div className="mb-2 flex flex-wrap justify-between gap-2 text-xs">
+            <span style={{ color }}>{label} · 单帧通道最大值</span>
+            <span>峰值 {Math.max(0, ...series).toFixed(1)} · 显示量程 0–{maximum.toFixed(1)}（传感器读数）</span>
+          </div>
+          <div className="flex gap-2">
+            <div className="flex w-14 shrink-0 flex-col justify-between text-right font-mono text-[10px] text-[#708790]">
+              <span>{maximum.toFixed(1)}</span><span>{(maximum / 2).toFixed(1)}</span><span>0</span>
+            </div>
+            <svg viewBox="0 0 100 50" className="h-36 min-w-0 flex-1" preserveAspectRatio="none" role="img" aria-label={`${label}压力峰值曲线，量程0至${maximum.toFixed(1)}`}>
+              {[0, 25, 50].map((y) => <line key={y} x1="0" x2="100" y1={y} y2={y} stroke="#203740" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />)}
+              <polyline points={series.map((value, index) => `${((curves.time[index] ?? 0) / duration) * 100},${50 - (value / maximum) * 50}`).join(" ")} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            </svg>
+          </div>
+          <div className="ml-16 mt-1 flex justify-between font-mono text-[10px] text-[#708790]"><span>0 s</span><span>{(duration / 2).toFixed(2)} s</span><span>{duration.toFixed(2)} s</span></div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -2453,13 +2476,17 @@ function SensorHeatmap({
   values,
   fps,
   features,
+  raw,
+  processed,
 }: {
   title: string;
   values: number[] | null;
   fps: number;
-  features?: { sum: number; max: number; nonzero: number };
+  features?: NonNullable<SensorData["features"]>["left"];
+  raw?: number[];
+  processed?: number[];
 }) {
-  const scale = Math.max(50, ...(values ?? [0]));
+  const scale = Math.max(1, features?.display_threshold ?? 100);
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
@@ -2478,14 +2505,19 @@ function SensorHeatmap({
           return (
             <div
               key={index}
-              title={`CH${index}: ${value.toFixed(1)}`}
-              className="aspect-square rounded-sm border border-white/5"
+              title={`CH${index + 1} 原始 ${raw?.[index]?.toFixed(1) ?? "—"} · 处理 ${processed?.[index]?.toFixed(1) ?? "—"} · 显示 ${value.toFixed(1)}`}
+              className="flex h-12 flex-col items-center justify-center rounded-sm border border-white/5 font-mono text-xs text-white"
               style={{
                 backgroundColor: `rgba(${Math.round(38 + 217 * intensity)}, ${Math.round(85 + 88 * intensity)}, ${Math.round(110 - 70 * intensity)}, ${0.16 + intensity * 0.84})`,
               }}
-            />
+            ><span className="text-[9px] text-[#91a4ac]">CH{index + 1}</span><span>{processed?.[index]?.toFixed(1) ?? "—"}</span></div>
           );
         })}
+      </div>
+      <div className="mt-2 text-xs leading-5 text-[#91a4ac]">
+        <div>颜色量程 0–{scale.toFixed(1)} · 数字为处理后读数（未换算 N/kPa）</div>
+        <div>原始峰值 {raw ? Math.max(...raw).toFixed(1) : "—"} · 处理后峰值 {features?.max.toFixed(1) ?? "—"}</div>
+        <div>基线{features?.baseline_enabled === false ? "未启用" : features?.baseline_ready ? "就绪" : "初始化中"} · 基线均值 {features?.baseline_mean.toFixed(1) ?? "—"} · 噪声均值 {features?.noise_mean.toFixed(1) ?? "—"}</div>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[10px] text-[#8297a1]">
         <span>Σ {features?.sum.toFixed(0) ?? "—"}</span>
